@@ -22,11 +22,6 @@ namespace Bob
         static readonly List<Player> Enemies = new List<Player>();
         static IEnumerable<Player> Players { get { return PlayersById.Values; } }
         static readonly Dictionary<int, Player> PlayersById = new Dictionary<int, Player>();
-        static readonly Dictionary<string, List<Player>> PlayersByTeam = new Dictionary<string, List<Player>>()
-        {
-            { Constants.TeamBlue, new List<Player>() },
-            { Constants.TeamRed, new List<Player>() },
-        };
 
         static void Main(string[] args)
         {
@@ -35,7 +30,6 @@ namespace Bob
             stateInit = Read<AiStateInit>();
             Self = new Player(stateInit);
             PlayersById[Self.Idx] = Self;
-            PlayersByTeam[Self.Team].Add(Self);
 
             // The seed is based on the bot index so bots act differently.
             rand = new Random((int)DateTimeOffset.UtcNow.Ticks + stateInit.index * 100000);
@@ -68,7 +62,6 @@ namespace Bob
                         {
                             p = new Player(statePlayer);
                             PlayersById[p.Idx] = p;
-                            PlayersByTeam[p.Team].Add(p);
 
                             if (p.IsAlly(Self))
                             {
