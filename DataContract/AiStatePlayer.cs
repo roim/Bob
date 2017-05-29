@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 
-namespace AiProtocol {
-    public class AiStatePlayer : AiState {
+namespace AiProtocol
+{
+    public class AiStatePlayer : AiState
+    {
         public int playerIndex;
         public bool shield;
         public bool wings;

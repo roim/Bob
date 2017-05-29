@@ -1,5 +1,7 @@
-﻿namespace AiProtocol {
-    public class AiStateVector2 {
+﻿namespace AiProtocol
+{
+    public class AiStateVector2
+    {
         public float x;
         public float y;
     }
