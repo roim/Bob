@@ -122,7 +122,10 @@ namespace Bob
                     {
                         if (rand.NextDouble() > 0.5)
                         {
-                            GamePad.Shoot = true;
+                            if (GamePad.StickDirection.HasFlag(Direction.Right) == enemy.Pos.x > Self.Pos.x)
+                            {
+                                GamePad.Shoot = true;
+                            }
                         }
                         else if (rand.NextDouble() > 0.25)
                         {
