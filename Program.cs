@@ -84,7 +84,7 @@ namespace Bob
                     }
                 }
 
-                if (Players.All(p => p.Dead))
+                if (Self.Dead)
                 {
                     Console.WriteLine();
                     continue;
