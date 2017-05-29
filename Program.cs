@@ -1,12 +1,11 @@
-﻿using Bob;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
-using System.IO;
+﻿using System;
 using System.Text;
 using AiProtocol;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
-namespace Bob {
+namespace Bob
+{
     class Program {
         static AiStateInit stateInit;
         static AiStateScenario stateScenario;
