@@ -1,6 +1,8 @@
 ﻿using System;
-using System.Text;
+using System.Collections.Generic;
+using System.Linq;
 using AiProtocol;
+using Bob.Entity;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -13,15 +15,30 @@ namespace Bob
         static AiStateUpdate stateUpdate;
         static Random rand;
 
+        static GamePad GamePad = new GamePad();
+        static Player Self;
+
+        static readonly List<Player> Allies = new List<Player>();
+        static readonly List<Player> Enemies = new List<Player>();
+        static IEnumerable<Player> Players { get { return PlayersById.Values; } }
+        static readonly Dictionary<int, Player> PlayersById = new Dictionary<int, Player>();
+        static readonly Dictionary<string, List<Player>> PlayersByTeam = new Dictionary<string, List<Player>>()
+        {
+            { Constants.TeamBlue, new List<Player>() },
+            { Constants.TeamRed, new List<Player>() },
+        };
+
         static void Main(string[] args)
         {
             // The communication is done over stdin. Every line is a json.
-
             // First, read the information about your player. This is sent only once.
             stateInit = Read<AiStateInit>();
+            Self = new Player(stateInit);
+            PlayersById[Self.Idx] = Self;
+            PlayersByTeam[Self.Team].Add(Self);
 
             // The seed is based on the bot index so bots act differently.
-            rand = new Random((int)DateTime.UtcNow.Ticks + stateInit.index * 100000);
+            rand = new Random((int)DateTimeOffset.UtcNow.Ticks + stateInit.index * 100000);
 
             while (true)
             {
@@ -29,123 +46,118 @@ namespace Bob
                 // It can be either the state of the scenario (the grid) or the state of the 
                 // entities (players, arrows, items, etc).
                 // Check the 'type' and act accordingly.
-                var aiState = Read<JToken>();
-                string type = aiState.SelectToken("type").Value<string>();
-                if (type == "scenario")
+                dynamic aiState = ReadDynamic();
+                if (aiState.type == Constants.AiStateTypeScenario)
                 {
-                    // There is the 'scenario' state, update that informs your bot about the 
-                    // current state of the ground.
-                    // DON'T ISSUE ANY COMMAND ATER READING A SCENARIO STATE.
                     stateScenario = aiState.ToObject<AiStateScenario>();
                     continue;
                 }
-                else if (type == "update")
+                else if (aiState.type == Constants.AiStateTypeUpdate)
                 {
-                    // When reading an 'update' state, your bot is expected to issue a command 
-                    // back for that particular loop.
                     stateUpdate = aiState.ToObject<AiStateUpdate>();
                 }
 
-                // This bot acts based on the position of the other player only. It
-                // has a very random playstyle:
-                //  - Runs to the enemy when it is below.
-                //  - Runs away from the enemy when it is above.
-                //  - Shoots when in the same horizontal line.
-                //  - Dashes randomly.
-                //  - Jumps randomly.
-
-                // Your bot is expected to output string with the 'pressed buttons'. 
-                // The order of the characters are irrelevant. Any other character is ignored.
-                // r = right
-                // l = left
-                // u = up
-                // d = down
-                // j = jump
-                // z = dash
-                // s = shoot
-
-                var sb = new StringBuilder();
-
-                AiStatePlayer myState = null;
-                AiStatePlayer otherState = null;
-
-                foreach (JToken state in stateUpdate.entities)
+                foreach (dynamic state in stateUpdate.entities)
                 {
-                    if (state.SelectToken("type").Value<string>() == "player")
+                    if (state.type == "player")
                     {
                         AiStatePlayer statePlayer = state.ToObject<AiStatePlayer>();
-                        if (statePlayer.playerIndex == stateInit.index)
+
+                        Player p;
+                        if (!PlayersById.TryGetValue(statePlayer.playerIndex, out p))
                         {
-                            myState = statePlayer;
+                            p = new Player(statePlayer);
+                            PlayersById[p.Idx] = p;
+                            PlayersByTeam[p.Team].Add(p);
+
+                            if (p.IsAlly(Self))
+                            {
+                                Allies.Add(p);
+                            }
+                            else
+                            {
+                                Enemies.Add(p);
+                            }
                         }
-                        else if (statePlayer.team != stateInit.team)
-                        {
-                            otherState = statePlayer;
-                        }
+
+                        p.Update(statePlayer);
                     }
                 }
 
-                // Our bot only do anything if players are in game.
-                if (myState == null || otherState == null)
+                if (Players.All(p => p.Dead))
                 {
                     Console.WriteLine();
                     continue;
                 }
 
-                if (otherState.position.y >= myState.position.y ||
-                    otherState.position.y < myState.position.y - 15)
+                // Run towards closest enemy
+                Player closestEnemy = Enemies.Where(e => !e.Dead).OrderBy(e => Self.Distance2(e)).FirstOrDefault();
+                if (closestEnemy != null)
                 {
-                    // Runs away if enemy is above
-                    if (otherState.position.x > myState.position.x)
+                    if (closestEnemy.Pos.x > Self.Pos.x)
                     {
-                        sb.Append('r');
+                        GamePad.Right();
                     }
                     else
                     {
-                        sb.Append('l');
+                        GamePad.Left();
                     }
                 }
-                else
+
+                bool hasEnemyAbove = false;
+                foreach (Player enemy in Enemies)
                 {
-                    // Runs to enemy if it is below
-                    if (otherState.position.x > myState.position.x)
+                    if (enemy.Dead) { continue; }
+                    double distance = Math.Sqrt(enemy.Distance2(Self));
+
+                    // Enemy might stomp us
+                    if (distance < 100 && enemy.Pos.y > Self.Pos.y)
                     {
-                        sb.Append('l');
-                    }
-                    else
-                    {
-                        sb.Append('r');
+                        hasEnemyAbove = true;
+                        if (enemy.Pos.x > Self.Pos.x)
+                        {
+                            GamePad.Right();
+                        }
+                        else
+                        {
+                            GamePad.Left();
+                        }
                     }
 
-                    // If in the same line shoots, 
-                    if (Math.Abs(myState.position.y - otherState.position.y) < 5)
+                    // Same line
+                    if (Math.Abs(Self.Pos.y - enemy.Pos.y) < 5)
                     {
-                        sb.Append('s');
+                        if (rand.NextDouble() > 0.5)
+                        {
+                            GamePad.Shoot = true;
+                        }
+                        else if (rand.NextDouble() > 0.25)
+                        {
+                            GamePad.Dash = true;
+                        }
                     }
                 }
 
-                // Presses dash in 20% of the loops.
-                if (rand.Next(5) == 0)
+                if (!hasEnemyAbove)
                 {
-                    sb.Append('z');
+                    if (rand.NextDouble() > 0.1)
+                    {
+                        GamePad.Jump = true;
+                    }
                 }
 
-                // Presses jump in 10% of the loops.
-                if (rand.Next(10) == 0)
-                {
-                    sb.Append('j');
-                }
-
-                // Issue the command back to the game.
-                Console.WriteLine(sb.ToString());
+                GamePad.IssueCommand();
             }
         }
 
-        private static T Read<T>()
+        static dynamic ReadDynamic()
         {
-            string line = Console.ReadLine();
-            T obj = JsonConvert.DeserializeObject<T>(line);
-            return obj;
+            return JObject.Parse(Console.ReadLine());
+        }
+
+        static T Read<T>()
+        {
+            return JsonConvert.DeserializeObject<T>(Console.ReadLine());
         }
     }
 }

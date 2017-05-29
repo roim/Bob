@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GamePad.cs" />
     <Compile Include="DataContract\AiState.cs" />
     <Compile Include="DataContract\AiStateArrow.cs" />
     <Compile Include="DataContract\AiStateBombArrow.cs" />
@@ -67,6 +68,8 @@
     <Compile Include="DataContract\AiStateSwitchBlock.cs" />
     <Compile Include="DataContract\AiStateUpdate.cs" />
     <Compile Include="DataContract\AiStateVector2.cs" />
+    <Compile Include="Constants.cs" />
+    <Compile Include="Entity\Player.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>
   <ItemGroup>
